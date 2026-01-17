@@ -15,6 +15,7 @@ import logging
 import aiohttp
 import traceback
 import datetime
+import argparse
 from typing import List, Optional, Dict, Any
 from pathlib import Path
 from enum import Enum
@@ -1056,15 +1057,19 @@ async def main():
     """Main execution function."""
     # Load environment variables
     load_dotenv()
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--fast", action="store_true")
+    parser.add_argument("--flashbots", action="store_true")
+    parser.add_argument("--attack", type=str, default="extcodesize")
+    parser.add_argument("--gas-target", type=int, default=0)
     
     # Check for flags
-    fast_mode = "--fast" in sys.argv
-    flashbots_mode = "--flashbots" in sys.argv
-    attack = "--attack" in sys.argv
-    gas_target = "--gas-target" in sys.argv
+    fast_mode = args.fast is True
+    flashbots_mode = args.flashbots is True
+    attack = args.attack
+    gas_target = args.gas_target
 
-    if not attack:
-        attack = "extcodesize"
     
     if fast_mode:
         logger.info("Fast mode enabled: will target block 2 blocks ahead")
@@ -1103,8 +1108,8 @@ async def main():
     account = Account.from_key(PRIVATE_KEY)
 
     abi_provider = None
-    if gas_target:
-        abi_provider = ZKaranageGasTargetABIProvider(0)
+    if gas_target > 0:
+        abi_provider = ZKaranageGasTargetABIProvider(gas_target)
     
     # Initialize ZKarnage
     zkarnage = ZKarnage(
