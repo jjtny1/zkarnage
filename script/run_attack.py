@@ -644,6 +644,7 @@ class ZKarnage:
         account: Account, 
         relay_url: str,
         abi_provider: ABIProvider,
+        num_transactions: Optional[int] = 1,
         attack: Optional[Attack] = Attack.EXTCODESIZE
         contract_address: Optional[Address] = None
     ):
@@ -652,6 +653,7 @@ class ZKarnage:
         self.contract_address = contract_address
         self.attack = attack,
         self.abi_provider = abi_provider
+        self.num_transactions = num_transactions
         self.flashbots = FlashbotsManager(w3, relay_url, account)
     
     def get_next_hundred_block(self, current_block: Optional[int] = None) -> int:
@@ -841,12 +843,24 @@ class ZKarnage:
                         logger.info("Account has HIGH PRIORITY status with Flashbots - bundles will be prioritized")
             
             # Prepare transaction with priority fee adjusted based on reputation
-            tx = self._prepare_attack_transaction(target_block, is_high_priority)
-            signed_tx = self.w3.eth.account.sign_transaction(tx, self.account.key)
+            txs = []
+            nonce = 0
+            for i in range(self.num_transactions):
+                txs.append(self._prepare_attack_transaction(target_block, is_high_priority))
+                txs[-1]["nonce"] = txs[-1]["nonce"] + (len(txs)-1)
+            
+            signed_txs = []
+            for tx in txs:
+                signed_txs.append(self.w3.eth.account.sign_transaction(tx, self.account.key))
             
             # Extract transaction hash for later status checks
-            tx_hash = signed_tx.hash.hex()
-            logger.info(f"Transaction hash: {tx_hash}")
+
+            tx_hashes = []
+            for signed_tx in signed_txs:
+                tx_hashes.append(signed_tx.hash.hex())
+
+            for tx_hash in tx_hashes:
+                logger.info(f"Transaction hash: {tx_hash}")
             
             # Wait until we're 4 blocks away from target
             last_logged_block = current_block
@@ -873,19 +887,28 @@ class ZKarnage:
                 
                 # Submit direct transaction
                 logger.info("Submitting direct transaction...")
-                tx_hash = self.w3.eth.send_raw_transaction(signed_tx.rawTransaction)
-                logger.info(f"Transaction submitted with hash: {tx_hash.hex()}")
+                for signed_tx in signed_txs:
+                    tx_hash = self.w3.eth.send_raw_transaction(signed_tx.rawTransaction)
+                    logger.info(f"Transaction submitted with hash: {tx_hash.hex()}")
                 
                 # Wait for transaction to be mined
                 logger.info("Waiting for transaction to be mined...")
-                receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, timeout=300)  # 5 minute timeout
                 
-                if receipt and receipt.status == 1:
-                    logger.info("Transaction successfully mined!")
-                    return True
-                else:
-                    logger.error("Transaction failed or timed out")
-                    return False
+                for tx_hash in tx_hashes:
+                    success = True
+                    receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, timeout=300)  # 5 minute timeout
+                    if not receipt:
+                        success = False
+                    if success and receipt.status != 1:
+                        success = False
+
+                    if not success:
+                        logger.error(f"Transaction failed or timed out: {tx_hash}")
+                        return False
+
+                logger.info("Transaction successfully mined!")
+                return True
+
             
             # Simulate bundle
             logger.info("Simulating bundle...")
@@ -1063,12 +1086,14 @@ async def main():
     parser.add_argument("--flashbots", action="store_true")
     parser.add_argument("--attack", type=str, default="extcodesize")
     parser.add_argument("--gas-target", type=int, default=0)
+    parser.add_argument("--num-transactions", type=int, default=1)
     
     # Check for flags
     fast_mode = args.fast is True
     flashbots_mode = args.flashbots is True
     attack = args.attack
     gas_target = args.gas_target
+    num_transactions = arge.num_transactions
 
     
     if fast_mode:
@@ -1116,8 +1141,9 @@ async def main():
         w3=w3, 
         account=account, 
         relay_url=FLASHBOTS_RELAY_URL,
-        abi_provider=abi_provider
-        attack=Attack[attack.upper()]
+        abi_provider=abi_provider,
+        num_transactions=num_transactions,
+        attack=Attack[attack.upper()],
         contract_address=Web3.to_checksum_address(CONTRACT_ADDRESS)
     )
     
