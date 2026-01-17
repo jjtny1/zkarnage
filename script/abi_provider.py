@@ -1,5 +1,6 @@
 from eth_abi import encode
 from abc import ABC, abstractmethod
+from web3 import Web3
 
 class ABIProvider(ABC):
 
