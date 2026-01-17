@@ -78,62 +78,73 @@ class Attack(Enum):
 
 
     def get_tx_data(self, abi_provider) -> str:
-        match self:
-            case Attack.EXTCODESIZE:
-                # Load contract targets from CSV file
-                try:
-                    import csv
-                    import os
-                    
-                    # Get the directory of the current script
-                    script_dir = os.path.dirname(os.path.abspath(__file__))
-                    csv_path = os.path.join(script_dir, "big-contracts.csv")
-                    
-                    # Default to 100 contracts if not specified
-                    max_contracts = int(os.getenv('MAX_CONTRACTS', '100'))
-                    
-                    contract_targets = []
-                    with open(csv_path, 'r') as f:
-                        reader = csv.DictReader(f)
-                        for row in reader:
-                            if len(contract_targets) >= max_contracts:
-                                break
-                            contract_targets.append(Web3.to_checksum_address(row['address']))
-                    
-                    logger.info(f"Loaded {len(contract_targets)} contracts from {csv_path}")
-                    
-                except Exception as e:
-                    logger.error(f"Error loading contracts from CSV: {e}")
-                    logger.error("Falling back to hardcoded contract list")
-                    # Fallback to hardcoded list if CSV loading fails
-                    contract_targets = [
-                        Web3.to_checksum_address("0x1908D2bD020Ba25012eb41CF2e0eAd7abA1c48BC"),
-                        # ... rest of the hardcoded addresses ...
-                    ]
+        if self == Attack.EXTCODESIZE:
+            # Load contract targets from CSV file
+            try:
+                import csv
+                import os
+                
+                # Get the directory of the current script
+                script_dir = os.path.dirname(os.path.abspath(__file__))
+                csv_path = os.path.join(script_dir, "big-contracts.csv")
+                
+                # Default to 100 contracts if not specified
+                max_contracts = int(os.getenv('MAX_CONTRACTS', '100'))
+                
+                contract_targets = []
+                with open(csv_path, 'r') as f:
+                    reader = csv.DictReader(f)
+                    for row in reader:
+                        if len(contract_targets) >= max_contracts:
+                            break
+                        contract_targets.append(Web3.to_checksum_address(row['address']))
+                
+                logger.info(f"Loaded {len(contract_targets)} contracts from {csv_path}")
+                
+            except Exception as e:
+                logger.error(f"Error loading contracts from CSV: {e}")
+                logger.error("Falling back to hardcoded contract list")
+                # Fallback to hardcoded list if CSV loading fails
+                contract_targets = [
+                    Web3.to_checksum_address("0x1908D2bD020Ba25012eb41CF2e0eAd7abA1c48BC"),
+                    # ... rest of the hardcoded addresses ...
+                ]
 
-                # Debug print addresses
-                logger.info(f"Contract targets: {contract_targets}")
-                logger.info(f"Number of targets: {len(contract_targets)}")
-                return abi_provider.get_extcodesize_attack_data(contract_targets)
+            # Debug print addresses
+            logger.info(f"Contract targets: {contract_targets}")
+            logger.info(f"Number of targets: {len(contract_targets)}")
+            return abi_provider.get_extcodesize_attack_data(contract_targets)
 
-            case Attack.JUMPDEST:
-                return abi_provider.get_jumpdest_attack_data()
-            case Attack.MCOPY:
-                return abi_provider.get_mcopy_attack_data()
-            case Attack.CALLDATACOPY:
-                return abi_provider.get_calldatacopy_attack_data(32 * 1024) # 32 Kb
-            case Attack.MODEXP:
-                return abi_provider.get_modexp_attack_data()
-            case Attack.BNPAIRING:
-                return abi_provider.get_bnpairing_attack_data()
-            case Attack.BNMUL:
-                return abi_provider.get_bnmult_attack_data()
-            case Attack.ECRECOVER:
-                return abi_provider.get_ecrecover_attack_data()
-            case Attack.KECCAK:
-                return abi_provider.get_keccak_attack_data(512)
-            case Attack.SHA256:
-                return abi_provider.get_sha256_attack_data(512)
+        elif attack == Attack.JUMPDEST:
+            return abi_provider.get_jumpdest_attack_data()
+
+        elif attack == Attack.MCOPY:
+            return abi_provider.get_mcopy_attack_data()
+
+        elif attack == Attack.CALLDATACOPY:
+            return abi_provider.get_calldatacopy_attack_data(32 * 1024)  # 32 KB
+
+        elif attack == Attack.MODEXP:
+            return abi_provider.get_modexp_attack_data()
+
+        elif attack == Attack.BNPAIRING:
+            return abi_provider.get_bnpairing_attack_data()
+
+        elif attack == Attack.BNMUL:
+            return abi_provider.get_bnmult_attack_data()
+
+        elif attack == Attack.ECRECOVER:
+            return abi_provider.get_ecrecover_attack_data()
+
+        elif attack == Attack.KECCAK:
+            return abi_provider.get_keccak_attack_data(512)
+
+        elif attack == Attack.SHA256:
+            return abi_provider.get_sha256_attack_data(512)
+
+        else:
+            raise ValueError(f"Unsupported attack type: {attack}")
+
 
 
 
@@ -645,7 +656,7 @@ class ZKarnage:
         relay_url: str,
         abi_provider: ABIProvider,
         num_transactions: Optional[int] = 1,
-        attack: Optional[Attack] = Attack.EXTCODESIZE
+        attack: Optional[Attack] = Attack.EXTCODESIZE,
         contract_address: Optional[Address] = None
     ):
         self.w3 = w3
@@ -1087,6 +1098,8 @@ async def main():
     parser.add_argument("--attack", type=str, default="extcodesize")
     parser.add_argument("--gas-target", type=int, default=0)
     parser.add_argument("--num-transactions", type=int, default=1)
+
+    args = parser.parse_args()
     
     # Check for flags
     fast_mode = args.fast is True
