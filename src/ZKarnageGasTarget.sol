@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
-contract ZKarnageGasLimit {
+contract ZKarnageGasTarget {
     event ContractAccessed(address indexed target, uint256 size);
     event AttackSummary(uint256 numContracts, uint256 totalSize);
     event ModExpResult(uint256 gasUsed, uint256 result);
@@ -24,7 +24,7 @@ contract ZKarnageGasLimit {
     uint256 defaultGasLeft = 3000;
     
     // Original EXTCODESIZE attack
-    function executeAttack(uint256 gasTarget, address[] calldata targets) external {
+    function executeExtCodesizeAttack(uint256 gasTarget, address[] calldata targets) external {
         uint256 totalSize = 0;
         uint256 i = 0;
 

