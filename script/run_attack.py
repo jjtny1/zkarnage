@@ -119,7 +119,7 @@ class Attack(Enum):
             return abi_provider.get_jumpdest_attack_data()
 
         elif attack == Attack.MCOPY:
-            return abi_provider.get_mcopy_attack_data()
+            return abi_provider.get_mcopy_attack_data(32 * 1024 ) # 32 KB
 
         elif attack == Attack.CALLDATACOPY:
             return abi_provider.get_calldatacopy_attack_data(32 * 1024)  # 32 KB
@@ -919,7 +919,9 @@ class ZKarnage:
                         logger.error(f"Transaction failed or timed out: {tx_hash}")
                         return False
 
-                logger.info("Transaction successfully mined!")
+                    logger.info(f"Transactions successfully mined!: {tx_hash}: {receipt['blockNumber']}")
+
+                logger.info("Transactions successfully mined!")
                 return True
 
             

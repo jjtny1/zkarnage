@@ -103,10 +103,11 @@ contract ZKarnageGasTarget {
     function executeCalldatacopyAttack(uint256 size, uint256 gasTarget) external {
         uint256 startGas = gasleft();
         uint256 gasUsed = 0;
+        uint256 wordChunks = (size / 32) + defaultGasLeft; // 32 byte chunks + extra buffer
 
         bytes memory output = new bytes(size);
         
-        while (gasleft() > 3000 && gasUsed < gasTarget) {
+        while (gasleft() > (3*wordChunks) && gasUsed < gasTarget) {
             assembly {
                 calldatacopy(add(output, 32), 0, size)
             }

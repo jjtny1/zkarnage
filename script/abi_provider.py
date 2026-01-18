@@ -58,9 +58,9 @@ class ZKaranageGasTargetABIProvider:
 		function_selector = Web3.keccak(text="executeJumpdestAttack(uint256)").hex()[0:10]  # 0x + 8 chars (4 bytes)
 		return function_selector + encoded_data.hex()
 
-	def get_mcopy_attack_data(self):
-		encoded_data = encode(['uint256'], [self.gas_target])
-		function_selector = Web3.keccak(text="executeMcopyAttack(uint256)").hex()[0:10]  # 0x + 8 chars (4 bytes)
+	def get_mcopy_attack_data(self, size):
+		encoded_data = encode(['uint256','uint256'], [size, self.gas_target])
+		function_selector = Web3.keccak(text="executeMcopyAttack(uint256,uint256)").hex()[0:10]  # 0x + 8 chars (4 bytes)
 		return function_selector + encoded_data.hex()
 
 	def get_calldatacopy_attack_data(self, size):
