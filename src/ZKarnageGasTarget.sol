@@ -304,7 +304,7 @@ contract ZKarnageGasTarget {
             
             // Batch processing loop
             let j := 0
-            for { j := 0 } and(gt(gas(), 3000), lt(gasUsed, gasTarget)) { j := add(j, 1) } {
+            for { j := 0 } and(gt(gas(), 25000), lt(gasUsed, gasTarget)) { j := add(j, 1) } {
                 // Calculate current batch
                 let currentBatch := batchSize
                 
@@ -312,7 +312,7 @@ contract ZKarnageGasTarget {
                 mstore(add(dataPtr, 64), j)
                 
                 // Inner loop for this batch
-                for { i := 0 } and(and(lt(i, currentBatch), gt(gas(), 3000)), lt(gasUsed, gasTarget)) { i := add(i, 1) } {
+                for { i := 0 } and(and(lt(i, currentBatch), gt(gas(), 25000)), lt(gasUsed, gasTarget)) { i := add(i, 1) } {
                     // Change input based on counter & previous hash
                     mstore(dataPtr, xor(runningHash, xor(i, blockNum)))
                     mstore(add(dataPtr, 32), xor(i, timeVal))
@@ -402,7 +402,7 @@ contract ZKarnageGasTarget {
             
             // Batch processing loop
             let j := 0
-            for { j := 0 } and(gt(gas(), 3000), lt(gasUsed, gasTarget)) { j := add(j, 1) } {
+            for { j := 0 } and(gt(gas(), 35000), lt(gasUsed, gasTarget)) { j := add(j, 1) } {
                 // Calculate current batch
                 let currentBatch := batchSize
                 
@@ -410,7 +410,15 @@ contract ZKarnageGasTarget {
                 mstore(add(dataPtr, 64), j)
                 
                 // Inner loop for this batch
-                for { i := 0 } and(and(lt(i, currentBatch), gt(gas(), 3000)), lt(gasUsed, gasTarget)) { i := add(i, 1) } {
+                for { i := 0 } and(and(lt(i, currentBatch), gt(gas(), 35000
+
+
+
+
+
+
+
+                    )), lt(gasUsed, gasTarget)) { i := add(i, 1) } {
                     // Change input based on counter & previous hash to ensure uniqueness
                     mstore(dataPtr, xor(runningHash, xor(i, blockNum)))
                     mstore(add(dataPtr, 32), xor(i, timeVal))
